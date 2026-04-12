@@ -4,6 +4,7 @@ pipeline {
     environment {
         IMAGE = "yazhinigp/my-website:latest"
         CONTAINER = "myapp"
+        PORT = "8081"
     }
 
     stages {
@@ -23,8 +24,10 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh 'echo $PASS | docker login -u $USER --password-stdin'
-                    sh 'docker push $IMAGE'
+                    sh '''
+                    echo $PASS | docker login -u $USER --password-stdin
+                    docker push $IMAGE
+                    '''
                 }
             }
         }
@@ -32,9 +35,14 @@ pipeline {
         stage('Deploy Container') {
             steps {
                 sh '''
-                docker stop $CONTAINER || true
-                docker rm $CONTAINER || true
-                docker run -d -p 8081:80 --name $CONTAINER $IMAGE
+                echo "Stopping old container if exists..."
+                docker rm -f $CONTAINER || true
+
+                echo "Removing any container using port 8081..."
+                docker ps -q --filter "publish=$PORT" | xargs -r docker rm -f
+
+                echo "Running new container..."
+                docker run -d -p $PORT:80 --name $CONTAINER $IMAGE
                 '''
             }
         }
